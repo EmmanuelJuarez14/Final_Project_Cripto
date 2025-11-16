@@ -1,0 +1,72 @@
+@use '../../global' as g;
+// .nav{
+//     width: 100%;
+//     height: 75px;
+//     background: g.$color-secondary;
+//     ul{
+//         width: 100%;
+//         display: flex;
+//         flex-direction: row;
+//         justify-content: space-around;
+//         align-items: center;
+//     }
+//     li:hover{
+//         cursor:pointer;
+//     }
+// }
+.custom-nav{
+    background: g.$color-secondary;
+}
+.nav-link,
+.navbar-brand {
+    font-weight: bold;
+    font-size: 17px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    font-family: 'Raleway', sans-serif;
+    color:white;
+}
+.nav-link:hover {
+    color: white;
+    -webkit-text-stroke: 1px #007bff;
+    text-shadow:
+    1px 1px 0 #007bff,
+    -1px 1px 0 #007bff,
+    1px -1px 0 #007bff,
+    -1px -1px 0 #007bff;
+    font-family: 'Raleway', sans-serif;
+    font-weight: bold;
+}
+.navbar-brand:hover {
+    color: white;
+    -webkit-text-stroke: 1px #007bff;
+    text-shadow:
+    1px 1px 0 #007bff,
+    -1px 1px 0 #007bff,
+    1px -1px 0 #007bff,
+    -1px -1px 0 #007bff;
+    font-family: 'Raleway', sans-serif;
+    font-weight: bold;
+
+}
+.navbar-toggler{
+    color: #007bff;
+    background-color: white;
+}
+
+
+
+
+/* Altura del header cuando el menú está CERRADO */
+.navbar {
+    min-height: 75px;         /* ajusta a lo que quieras */
+    height: auto;             /* importante: no forzar height */
+    transition: min-height .25s ease;
+    align-items: center;
+}
+
+.nav-link:active,
+.nav-link:focus,
+.nav-link.show {
+  color: white !important;     /* o el color que quieras */
+}
