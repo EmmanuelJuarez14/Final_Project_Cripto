@@ -8,10 +8,7 @@ from app.crypto.chacha import cifrar_texto, descifrar_texto
 
 router = APIRouter()
 
-
-# ============================================================
 # REGISTER
-# ============================================================
 @router.post("/register", response_model=UsuarioRespuesta)
 def registrar_usuario(data: RegistroUsuario, db: Session = Depends(get_db)):
     
@@ -38,10 +35,7 @@ def registrar_usuario(data: RegistroUsuario, db: Session = Depends(get_db)):
 
     return nuevo
 
-
-# ============================================================
 # LOGIN
-# ============================================================
 @router.post("/login")
 def login(data: LoginUsuario, db: Session = Depends(get_db)):
 

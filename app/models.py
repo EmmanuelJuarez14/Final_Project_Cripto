@@ -3,9 +3,7 @@ from sqlalchemy.orm import relationship
 from datetime import datetime
 from .database import Base
 
-# ============================================================
 # MODELO USUARIO
-# ============================================================
 class Usuario(Base):
     __tablename__ = "usuarios"
 
@@ -26,11 +24,7 @@ class Usuario(Base):
     # Relación con solicitudes de acceso
     solicitudes = relationship("Solicitud", back_populates="solicitante_rel")
 
-
-# ============================================================
 # MODELO VIDEO
-# ============================================================
-
 class Video(Base):
     __tablename__ = "videos"
 
@@ -42,23 +36,18 @@ class Video(Base):
 
     ruta_archivo = Column(String, nullable=False)
 
-    # NUEVO: clave simétrica cifrada desde el front-end
+    # clave simétrica cifrada desde el front-end
     key_cifrada = Column(String, nullable=False)
 
-    # Firma se usará en semana 3
     firma = Column(String, nullable=True)
 
     autor_id = Column(Integer, ForeignKey("usuarios.id"))
 
     autor_rel = relationship("Usuario", back_populates="videos")
 
-    # 👉 ESTA RELACIÓN FALTABA
     solicitudes = relationship("Solicitud", back_populates="video_rel")
 
-
-# ============================================================
 # MODELO SOLICITUD
-# ============================================================
 class Solicitud(Base):
     __tablename__ = "solicitudes"
 

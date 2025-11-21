@@ -13,4 +13,4 @@ app.include_router(videos.router)
 
 @app.get("/")
 def root():
-    return {"mensaje": "Servidor backend funcionando correctamente en Linuxs"}
+    return {"mensaje": "Servidor backend funcionando correctamente"}

@@ -48,3 +48,9 @@ async def subir_video(
     db.refresh(nuevo)
 
     return nuevo
+
+@router.get("/my_videos")
+def mis_videos(autor_id: int, db: Session = Depends(get_db)):
+    # Retorna todos los videos pertenecientes al usuario especificado.
+    videos = db.query(Video).filter(Video.autor_id == autor_id).all()
+    return videos
