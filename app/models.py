@@ -13,7 +13,7 @@ class Usuario(Base):
     correo = Column(String, unique=True, index=True, nullable=False)
     
     # Contraseña cifrada con ChaCha20 y almacenada como base64
-    password = Column(String, nullable=False)
+    password_hash = Column(String, nullable=False)
 
     rol = Column(String, default="usuario")  # usuario / admin
     estado = Column(String, default="pendiente")  # pendiente / aprobado

@@ -17,14 +17,12 @@ def registrar_usuario(data: RegistroUsuario, db: Session = Depends(get_db)):
     if existente:
         raise HTTPException(status_code=400, detail="El correo ya está registrado.")
 
-    # Cifrar la contraseña con ChaCha20
-    password_cifrada = cifrar_texto(data.password)
 
     # Crear el usuario
     nuevo = Usuario(
         nombre=data.nombre,
         correo=data.correo,
-        password=password_cifrada,
+        password_hash=data.password_hash,
         estado="pendiente",
         rol="usuario"
     )
@@ -44,10 +42,7 @@ def login(data: LoginUsuario, db: Session = Depends(get_db)):
     if not usuario:
         raise HTTPException(status_code=404, detail="Usuario no encontrado.")
 
-    # Desencriptar contraseña almacenada
-    password_original = descifrar_texto(usuario.password)
-
-    if password_original != data.password:
+    if usuario.password_hash != data.password_hash:
         raise HTTPException(status_code=401, detail="Contraseña incorrecta.")
 
     return {
