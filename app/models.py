@@ -3,9 +3,7 @@ from sqlalchemy.orm import relationship
 from datetime import datetime
 from .database import Base
 
-# ============================================================
 # MODELO USUARIO
-# ============================================================
 class Usuario(Base):
     __tablename__ = "usuarios"
 
@@ -14,8 +12,8 @@ class Usuario(Base):
     nombre = Column(String, nullable=False)
     correo = Column(String, unique=True, index=True, nullable=False)
     
-    # Contraseña cifrada con ChaCha20 y almacenada como base64
-    password = Column(String, nullable=False)
+    # Contraseña ahora viene hasheada desde el front (SHA-256)
+    password_hash = Column(String, nullable=False)
 
     rol = Column(String, default="usuario")  # usuario / admin
     estado = Column(String, default="pendiente")  # pendiente / aprobado
@@ -27,10 +25,7 @@ class Usuario(Base):
     solicitudes = relationship("Solicitud", back_populates="solicitante_rel")
 
 
-# ============================================================
 # MODELO VIDEO
-# ============================================================
-
 class Video(Base):
     __tablename__ = "videos"
 
@@ -42,23 +37,23 @@ class Video(Base):
 
     ruta_archivo = Column(String, nullable=False)
 
-    # NUEVO: clave simétrica cifrada desde el front-end
+    # clave simétrica cifrada enviada por el front-end
     key_cifrada = Column(String, nullable=False)
 
-    # Firma se usará en semana 3
-    firma = Column(String, nullable=True)
+    # Hash SHA-256 del archivo cifrado (nuevo en semana 3)
+    hash_archivo = Column(String, nullable=False)
+
+    # Firma digital ECDSA del hash
+    firma = Column(String, nullable=False)
 
     autor_id = Column(Integer, ForeignKey("usuarios.id"))
-
     autor_rel = relationship("Usuario", back_populates="videos")
 
-    # 👉 ESTA RELACIÓN FALTABA
+    # Relación con solicitudes de acceso
     solicitudes = relationship("Solicitud", back_populates="video_rel")
 
 
-# ============================================================
 # MODELO SOLICITUD
-# ============================================================
 class Solicitud(Base):
     __tablename__ = "solicitudes"
 

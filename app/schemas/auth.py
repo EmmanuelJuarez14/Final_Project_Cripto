@@ -4,12 +4,12 @@ from pydantic import BaseModel, EmailStr
 class RegistroUsuario(BaseModel):
     nombre: str
     correo: EmailStr
-    password: str
+    password_hash: str
 
 # Datos que llegan en /login
 class LoginUsuario(BaseModel):
     correo: EmailStr
-    password: str
+    password_hash: str
 
 # Respuesta que regresamos al registrarse
 class UsuarioRespuesta(BaseModel):
