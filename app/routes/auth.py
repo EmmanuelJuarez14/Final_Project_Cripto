@@ -1,14 +1,18 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from jose import jwt
 
 from app.schemas.auth import RegistroUsuario, LoginUsuario, UsuarioRespuesta
 from app.database import get_db
 from app.models import Usuario
-from app.crypto.chacha import cifrar_texto, descifrar_texto
+from app.dependencies import SECRET_KEY, ALGORITHM
 
 router = APIRouter()
 
-# REGISTER
+
+# ===============================================================
+#   REGISTER (semana 3: recibe password SHA-256 desde el front)
+# ===============================================================
 @router.post("/register", response_model=UsuarioRespuesta)
 def registrar_usuario(data: RegistroUsuario, db: Session = Depends(get_db)):
     
@@ -17,12 +21,11 @@ def registrar_usuario(data: RegistroUsuario, db: Session = Depends(get_db)):
     if existente:
         raise HTTPException(status_code=400, detail="El correo ya está registrado.")
 
-
-    # Crear el usuario
+    # Crear usuario
     nuevo = Usuario(
         nombre=data.nombre,
         correo=data.correo,
-        password_hash=data.password_hash,
+        password_hash=data.password_hash,   # hash SHA-256 generado en front-end
         estado="pendiente",
         rol="usuario"
     )
@@ -33,7 +36,11 @@ def registrar_usuario(data: RegistroUsuario, db: Session = Depends(get_db)):
 
     return nuevo
 
-# LOGIN
+
+
+# ===============================================================
+#   LOGIN — retorna JWT (semana 3)
+# ===============================================================
 @router.post("/login")
 def login(data: LoginUsuario, db: Session = Depends(get_db)):
 
@@ -42,16 +49,21 @@ def login(data: LoginUsuario, db: Session = Depends(get_db)):
     if not usuario:
         raise HTTPException(status_code=404, detail="Usuario no encontrado.")
 
+    # Comparar hash enviado VS hash almacenado
     if usuario.password_hash != data.password_hash:
         raise HTTPException(status_code=401, detail="Contraseña incorrecta.")
 
+    # -----------------------------------------------------------
+    #   *** GENERAR JWT ***
+    # -----------------------------------------------------------
+    token = jwt.encode(
+        {"id": usuario.id},        # solo necesitamos saber el usuario
+        SECRET_KEY,
+        algorithm=ALGORITHM
+    )
+
     return {
-        "mensaje": "Inicio de sesión exitoso",
-        "usuario": {
-            "id": usuario.id,
-            "nombre": usuario.nombre,
-            "correo": usuario.correo,
-            "rol": usuario.rol,
-            "estado": usuario.estado,
-        }
+        "access_token": token,
+        "token_type": "bearer",
+        "usuario_id": usuario.id
     }
