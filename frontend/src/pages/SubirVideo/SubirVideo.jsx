@@ -151,7 +151,7 @@ const SubirVideo = () => {
             }
 
             setUploadProgress(100);
-            toast.success("✅ Video cifrado y subido correctamente");
+            toast.success("Video cifrado y subido correctamente");
             
             setTimeout(() => {
                 navigate("/ver-videos");
@@ -183,7 +183,7 @@ const SubirVideo = () => {
                             <div className="card-header bg-primary text-white">
                                 <h4 className="mb-0">
                                     <i className="bi bi-cloud-upload me-2"></i>
-                                    Subir Video Cifrado 🔐
+                                    Subir Video Cifrado
                                 </h4>
                             </div>
                             <div className="card-body">
@@ -329,8 +329,7 @@ const SubirVideo = () => {
                                         <ul className="mb-0 mt-2 small">
                                             <li>Video cifrado con <strong>ChaCha20-Poly1305</strong> (cifrado autenticado)</li>
                                             <li>Clave protegida con <strong>RSA-OAEP</strong> (cifrado asimétrico)</li>
-                                            <li>Tag de autenticación de 16 bytes para verificar integridad</li>
-                                            <li>Proceso completamente en el navegador</li>
+                                            
                                         </ul>
                                     </div>
 

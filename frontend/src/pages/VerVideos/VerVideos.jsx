@@ -56,78 +56,42 @@ const VerVideos=()=>{
     useEffect(() => {
     const fetchVideos = async () => {
       try {
-        // const response = await fetch(`${}/getVideos`, {
-        //   method: "GET",
-        //   headers: {
-        //     "Content-Type": "application/json",
-        //   },
-        // });
+        const usuario = JSON.parse(localStorage.getItem("usuario"));
+        const autorId = usuario?.id; // <- cámbialo por el ID real del usuario autenticado
 
-      const response = {
-      ok: true,
-      json: async () => ({
-        items: [
+        const response = await fetch(
+          `${process.env.REACT_APP_API_URL}/videos/my_videos?autor_id=${autorId}`,
           {
-            id: "vid_001",
-            titulo: "Introducción a React",
-            descripcion: "Video básico para entender componentes y props.",
-            autor_id: "user_123",
-            fecha: "2025-01-10",
-            duracion: "12:45"
-          },
-          {
-            id: "vid_002",
-            titulo: "Criptografía con WebCrypto",
-            descripcion: "Explicación de RSA-OAEP, AES-GCM y HKDF.",
-            autor_id: "user_456",
-            fecha: "2025-01-12",
-            duracion: "18:20"
-          },
-          {
-            id: "vid_003",
-            titulo: "Cómo usar DynamoDB",
-            descripcion: "Conceptos de tablas, particiones y consultas.",
-            autor_id: "user_789",
-            fecha: "2025-01-14",
-            duracion: "15:05"
-          },
-          {
-            id: "vid_004",
-            titulo: "Firmas digitales con Ed25519",
-            descripcion: "Cómo firmar y verificar mensajes.",
-            autor_id: "user_999",
-            fecha: "2025-01-20",
-            duracion: "09:31"
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+              // Si necesitas token:
+              // "x-token": token
+            },
           }
-        ]
-      })
-    };
+        );
 
-        if (!response.ok) {
-          throw new Error("Error al obtener los videos");
-        }
+        if (!response.ok) throw new Error("Error al obtener los videos");
 
-        const data = await response.json();
-
-        console.log(data)
-
-        const videos = data.items || data;
-
+        const videos = await response.json();
+        console.log(videos)
+        // Construir filas para DataTable
         const formattedData = videos.map(v => {
-          const editButton = `<button class="btn btn-sm btn-primary ver-btn" data-video='${JSON.stringify(v)}'>Ver</button>`;
+          const btn = `<button class="btn btn-sm btn-primary ver-btn" data-video='${JSON.stringify(
+            v
+          )}'>Ver</button>`;
+
           return [
-          v.titulo || "",
-          v.descripcion || "",
-          v.autor_id || "",
-          editButton
-        ]
-      });
-        console.log(formattedData)
+            v.titulo ?? "",
+            v.descripcion ?? "",
+            v.autor_id ?? "",
+            btn
+          ];
+        });
+
         setTableData(formattedData);
       } catch (error) {
         console.error("Error:", error);
-      } finally {
-        //setLoading(false);
       }
     };
 

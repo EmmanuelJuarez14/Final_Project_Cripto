@@ -1,9 +1,13 @@
 
 import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+
 import './_header.scss'
 const Header = ({admin}) => {
+    const navigate = useNavigate();
     const handleLogout = () => {
-
+        localStorage.removeItem("usuario");
+        navigate("/login");
   };
     return (
         <nav className="navbar navbar-expand-lg custom-nav px-3">
