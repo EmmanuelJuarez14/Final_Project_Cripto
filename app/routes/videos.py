@@ -29,46 +29,36 @@ async def subir_video(
     archivo: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
-    # Validar formato de archivo
+
     if not archivo.filename.lower().endswith((".mp4", ".mov", ".avi", ".mkv")):
         raise HTTPException(400, "Formato de video no permitido.")
 
-    # Crear nombre de archivo único
-    # Limpia el nombre del archivo para evitar espacios o caracteres problemáticos
     nombre_limpio = re.sub(r'[^a-zA-Z0-9._-]', '_', archivo.filename)
 
-    # Crear nombre único sin espacios
     nombre_archivo = f"{uuid.uuid4()}_{nombre_limpio}"
     ruta_completa = os.path.join(UPLOAD_DIR, nombre_archivo)
 
-    # Crear el directorio si no existe
     os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-    # Guardar archivo cifrado tal como llega
     with open(ruta_completa, "wb") as buffer:
         contenido = await archivo.read()
         buffer.write(contenido)
+    # Nota: para archivos muy grandes conviene leer en chunks con await archivo.read(n) en un loop y escribir progresivamente para evitar picos de memoria.
+    hash_bytes = hash_file(ruta_completa)  # bytes
 
-    # =============================
-    # 🔐 Semana 3: Criptografía
-    # =============================
+    signature_bytes = sign_hash(hash_bytes)
+    signature_hex = signature_bytes.hex()
 
-    # 1) Hash SHA-256 del archivo cifrado
-    hash_archivo = hash_file(ruta_completa)
+    hash_hex = hash_bytes.hex()
 
-    # 2) Firma digital ECDSA del hash
-    firma_bytes = sign_hash(hash_archivo)
-    firma_hex = firma_bytes.hex()
-
-    # Registrar en BD
     nuevo = Video(
         titulo=titulo,
         descripcion=descripcion,
         ruta_archivo=ruta_completa,
         autor_id=autor_id,
         key_cifrada=key_cifrada,
-        hash_archivo=hash_archivo,
-        firma=firma_hex
+        hash_archivo=hash_hex, 
+        firma=signature_hex
     )
 
     db.add(nuevo)
@@ -90,9 +80,9 @@ def verificar_video(video_id: int, db: Session = Depends(get_db)):
         raise HTTPException(404, "Video no encontrado")
 
     # Recalcular hash actual del archivo
-    hash_actual = hash_file(video.ruta_archivo)
+    hash_actual = hash_file(video.ruta_archivo) #Está en bytes
 
-    integridad_ok = (hash_actual == video.hash_archivo)
+    integridad_ok = (video.hash_archivo == hash_actual.hex())
 
     # Verificar firma digital ECDSA
     firma_bytes = bytes.fromhex(video.firma)
