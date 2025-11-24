@@ -4,7 +4,8 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import './_iniciarSesion.scss';
 import PublicHeader from "../../components/PublicHeader/PublicHeader";
-
+import { hashPassword } from "../../utils/hash";
+import { toast } from "react-toastify";
 const IniciarSesion=()=>{
     
     const navigate = useNavigate();
@@ -29,15 +30,54 @@ const IniciarSesion=()=>{
   };
 
     // Manejar el envío del formulario
-    const handleLogin = async (event) => {
-  
-    };
+     const handleLogin = async () => {
+    setLoading(true);
+
+    try {
+      const password_hash = hashPassword(password);
+
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          correo: email,
+          password_hash
+        })
+      });
+
+      const raw = await response.text();
+      console.log("RAW:", raw);
+
+      const data = raw ? JSON.parse(raw) : null;
+
+      if (!response.ok) {
+        toast.error(data?.detail || "Error al iniciar sesión");
+        setLoading(false);
+        return;
+      }
+
+      toast.success("Inicio de sesión exitoso");
+
+      localStorage.setItem("usuario", JSON.stringify(data.usuario));
+
+      navigate("/comunidad");
+
+
+    } catch (error) {
+      console.error(error);
+      toast.error("Error de conexión con el servidor");
+    }
+
+    setLoading(false);
+  };
+
 
     return(
         <div className="background">
           <PublicHeader />
             <form className={`needs-validation ${validated ? "was-validated" : ""} form__container`} noValidate onSubmit={handleSubmit}>
                 <h2 className="bold">Iniciar sesión</h2>
+                <p>Completa los campos para ingresar a tu cuenta. ¿Aún no tienes una cuenta? <Link to="/signup"><u>crear cuenta</u></Link></p>
                 <div className="mb-3">
                     <label htmlFor="email" className="form-label bold">Correo electrónico</label>
                     <input

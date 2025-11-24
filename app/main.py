@@ -4,6 +4,7 @@ from app.database import engine
 from app.routes import auth
 from app.routes import videos
 from app.crypto.ecdsa_keys import generate_keys
+from fastapi.middleware.cors import CORSMiddleware
 
 generate_keys()
 
@@ -13,6 +14,14 @@ app = FastAPI(title="Streaming Secure Service")
 
 app.include_router(auth.router)
 app.include_router(videos.router)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],       # Permitir desde cualquier origen
+    allow_credentials=True,
+    allow_methods=["*"],       # Permite POST, GET, OPTIONS, DELETE, etc.
+    allow_headers=["*"],       # Permite cualquier header
+)
 
 @app.get("/")
 def root():

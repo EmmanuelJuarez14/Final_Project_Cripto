@@ -1,0 +1,4 @@
+venv
+__pycache__
+videos.db*
+videos_cifrados

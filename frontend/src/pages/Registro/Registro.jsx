@@ -3,7 +3,8 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import './_iniciarSesion.scss';
 import PublicHeader from "../../components/PublicHeader/PublicHeader";
-
+import { hashPassword } from "../../utils/hash";
+import { toast } from "react-toastify";
 const Registro=()=>{
     
     const navigate = useNavigate();
@@ -24,15 +25,47 @@ const Registro=()=>{
     event.preventDefault();
     event.stopPropagation();
     
-    handleLogin(event)
+    handleLogin()
     }
     
   };
 
     // Manejar el envío del formulario
-    const handleLogin = async (event) => {
-  
+    const handleLogin = async () => {
+  try {
+    setLoading(true);
+
+    const hashed = hashPassword(password);
+
+    const body = {
+      nombre: `${nombres} ${apellidos}`,
+      correo: email,
+      password_hash: hashed
     };
+
+    const response = await fetch(`${process.env.REACT_APP_API_URL}/register`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(body),
+    });
+    const result = await response.json();
+    console.log("Resultado del registro:", result);
+
+    if (!response.ok) {
+      alert(result.detail);
+      setLoading(false);
+      return;
+    }
+    toast.success("Usuario creado")
+    navigate("/login");
+  } catch (error) {
+    toast.error(error);
+  } finally {
+    setLoading(false);
+  }
+};
 
     return(
         <div className="background">

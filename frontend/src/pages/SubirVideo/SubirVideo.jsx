@@ -2,6 +2,7 @@ import Header from "../../components/Header/Header"
 import { useState } from 'react';
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
+import { cifrarClaveConRSA, cifrarVideoConChaCha20, generarClaveSimetrica } from "../../utils/crypto";
 
 const SubirVideo = () => {
     const navigate = useNavigate();
@@ -9,12 +10,13 @@ const SubirVideo = () => {
     const [formData, setFormData] = useState({
         titulo: "",
         descripcion: "",
-        url_video: "",
-        duracion: "",
-        categoria: "",
     });
     const [videoFile, setVideoFile] = useState(null);
     const [preview, setPreview] = useState(null);
+    const [uploadProgress, setUploadProgress] = useState(0);
+    
+    const usuario = JSON.parse(localStorage.getItem("usuario"));
+    const autorId = usuario?.id;
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -57,62 +59,108 @@ const SubirVideo = () => {
             return;
         }
 
-        if (!formData.url_video.trim() && !videoFile) {
-            toast.error("Debes proporcionar una URL o subir un archivo de video");
+        if (!videoFile) {
+            toast.error("Debes seleccionar un archivo de video");
             return;
         }
 
         setLoading(true);
+        setUploadProgress(0);
 
         try {
+            // ================================
+            // 1. Generar clave simétrica (32 bytes para ChaCha20)
+            // ================================
+            toast.info("Generando clave de cifrado...");
+            const claveSimetrica = generarClaveSimetrica(); // Uint8Array de 32 bytes
+            
+            // ================================
+            // 2. Cifrar la clave simétrica con RSA-OAEP
+            // ================================
+            toast.info("Cifrando clave con RSA-OAEP...");
+            const keyCifrada = await cifrarClaveConRSA(claveSimetrica);
+            setUploadProgress(10);
+
+            // ================================
+            // 3. Leer el archivo de video como ArrayBuffer
+            // ================================
+            toast.info("Leyendo archivo de video...");
+            const arrayBuffer = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = () => reject(new Error('Error al leer el archivo'));
+                reader.readAsArrayBuffer(videoFile);
+            });
+            
+            const videoBytes = new Uint8Array(arrayBuffer);
+            setUploadProgress(20);
+
+            // ================================
+            // 4. Cifrar el video con ChaCha20-Poly1305
+            // ================================
+            toast.info("Cifrando video con ChaCha20-Poly1305... (esto puede tardar)");
+            console.log('📊 Datos antes de cifrar:', {
+                videoBytes: videoBytes?.length,
+                claveSimetrica: claveSimetrica?.length,
+                tipoVideoBytes: videoBytes?.constructor?.name,
+                tipoClave: claveSimetrica?.constructor?.name
+            });
+            
+            const videoCifrado = cifrarVideoConChaCha20(videoBytes, claveSimetrica);
+            setUploadProgress(60);
+
+            // ================================
+            // 5. Crear Blob con el video cifrado
+            // ================================
+            // Preservar el nombre original del archivo para la validación del backend
+            const nombreOriginal = videoFile.name;
+            const videoCifradoBlob = new Blob([videoCifrado], { type: 'application/octet-stream' });
+            
+            // ================================
+            // 6. Enviar al backend
+            // ================================
+            toast.info("Subiendo video cifrado al servidor...");
             const dataToSend = new FormData();
             dataToSend.append('titulo', formData.titulo);
             dataToSend.append('descripcion', formData.descripcion);
-            dataToSend.append('categoria', formData.categoria);
+            dataToSend.append('key_cifrada', keyCifrada); // Clave cifrada con RSA-OAEP
+            dataToSend.append('autor_id', autorId);
+            // El tercer parámetro (nombreOriginal) se convierte en archivo.filename en el backend
+            dataToSend.append('archivo', videoCifradoBlob, nombreOriginal);
 
-            
-            if (videoFile) {
-                dataToSend.append('video', videoFile);
-                dataToSend.append('duracion', formData.duracion);
-            } else {
-                dataToSend.append('url_video', formData.url_video);
+            setUploadProgress(70);
+
+            const response = await fetch(
+                `${process.env.REACT_APP_API_URL}/videos/upload`,
+                {
+                    method: "POST",
+                    body: dataToSend
+                }
+            );
+
+            setUploadProgress(90);
+
+            const raw = await response.text();
+            const result = raw ? JSON.parse(raw) : null;
+
+            if (!response.ok) {
+                toast.error(result?.detail || "Error al subir video");
+                setLoading(false);
+                setUploadProgress(0);
+                return;
             }
 
-            // Aquí va tu llamada a la API
-            /*
-            const response = await fetch(`${import.meta.env.VITE_API_URL}/videos`, {
-                method: "POST",
-                headers: {
-                    "x-token": localStorage.getItem("token"),
-                },
-                body: dataToSend
-            });
-
-            const result = await response.json();
-
-            if (response.ok) {
-                toast.success("Video subido correctamente");
-                navigate("/videos");
-            } else {
-                toast.error(result.error || "Error al subir el video");
-            }
-            */
-
-            // Simulación
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            toast.success("Video subido correctamente");
-            console.log("Datos a enviar:", {
-                titulo: formData.titulo,
-                descripcion: formData.descripcion,
-                categoria: formData.categoria,
-                archivo: videoFile?.name || formData.url_video
-            });
+            setUploadProgress(100);
+            toast.success("✅ Video cifrado y subido correctamente");
             
-            // navigate("/videos");
+            setTimeout(() => {
+                navigate("/ver-videos");
+            }, 1000);
 
         } catch (error) {
             console.error("Error al subir video:", error);
-            toast.error("Error al subir el video");
+            toast.error(`Error: ${error.message || "Error de conexión"}`);
+            setUploadProgress(0);
         } finally {
             setLoading(false);
         }
@@ -135,7 +183,7 @@ const SubirVideo = () => {
                             <div className="card-header bg-primary text-white">
                                 <h4 className="mb-0">
                                     <i className="bi bi-cloud-upload me-2"></i>
-                                    Subir Video
+                                    Subir Video Cifrado 🔐
                                 </h4>
                             </div>
                             <div className="card-body">
@@ -154,6 +202,7 @@ const SubirVideo = () => {
                                             onChange={handleInputChange}
                                             placeholder="Ingresa el título del video"
                                             required
+                                            disabled={loading}
                                         />
                                     </div>
 
@@ -170,30 +219,8 @@ const SubirVideo = () => {
                                             onChange={handleInputChange}
                                             rows="4"
                                             placeholder="Describe tu video..."
+                                            disabled={loading}
                                         ></textarea>
-                                    </div>
-
-                                    {/* Categoría */}
-                                    <div className="mb-3">
-                                        <label htmlFor="categoria" className="form-label">
-                                            Categoría
-                                        </label>
-                                        <select
-                                            className="form-select"
-                                            id="categoria"
-                                            name="categoria"
-                                            value={formData.categoria}
-                                            onChange={handleInputChange}
-                                        >
-                                            <option value="">Selecciona una categoría</option>
-                                            <option value="programacion">Programación</option>
-                                            <option value="diseno">Diseño</option>
-                                            <option value="marketing">Marketing</option>
-                                            <option value="negocios">Negocios</option>
-                                            <option value="ciencia">Ciencia</option>
-                                            <option value="educacion">Educación</option>
-                                            <option value="otro">Otro</option>
-                                        </select>
                                     </div>
 
                                     <hr className="my-4" />
@@ -246,7 +273,7 @@ const SubirVideo = () => {
                                                         </div>
 
                                                         {/* Preview del video */}
-                                                        {preview && (
+                                                        {preview && !loading && (
                                                             <div className="mb-3">
                                                                 <video 
                                                                     src={preview} 
@@ -258,22 +285,6 @@ const SubirVideo = () => {
                                                                 </video>
                                                             </div>
                                                         )}
-
-                                                        {/* Duración del video */}
-                                                        <div className="mb-0">
-                                                            <label htmlFor="duracion" className="form-label">
-                                                                Duración (opcional)
-                                                            </label>
-                                                            <input
-                                                                type="text"
-                                                                className="form-control"
-                                                                id="duracion"
-                                                                name="duracion"
-                                                                value={formData.duracion}
-                                                                onChange={handleInputChange}
-                                                                placeholder="Ej: 15:30"
-                                                            />
-                                                        </div>
                                                     </div>
                                                     
                                                     <button
@@ -284,12 +295,43 @@ const SubirVideo = () => {
                                                             setPreview(null);
                                                             document.getElementById('videoFileInput').value = '';
                                                         }}
+                                                        disabled={loading}
                                                     >
                                                         <i className="bi bi-trash"></i>
                                                     </button>
                                                 </div>
                                             </div>
                                         )}
+                                    </div>
+
+                                    {/* Barra de progreso */}
+                                    {loading && uploadProgress > 0 && (
+                                        <div className="mb-3">
+                                            <div className="progress" style={{ height: '25px' }}>
+                                                <div 
+                                                    className="progress-bar progress-bar-striped progress-bar-animated"
+                                                    role="progressbar"
+                                                    style={{ width: `${uploadProgress}%` }}
+                                                    aria-valuenow={uploadProgress}
+                                                    aria-valuemin="0"
+                                                    aria-valuemax="100"
+                                                >
+                                                    {uploadProgress}%
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Alerta de seguridad */}
+                                    <div className="alert alert-info">
+                                        <i className="bi bi-shield-lock me-2"></i>
+                                        <strong>Seguridad mejorada:</strong>
+                                        <ul className="mb-0 mt-2 small">
+                                            <li>Video cifrado con <strong>ChaCha20-Poly1305</strong> (cifrado autenticado)</li>
+                                            <li>Clave protegida con <strong>RSA-OAEP</strong> (cifrado asimétrico)</li>
+                                            <li>Tag de autenticación de 16 bytes para verificar integridad</li>
+                                            <li>Proceso completamente en el navegador</li>
+                                        </ul>
                                     </div>
 
                                     {/* Botones */}
@@ -311,12 +353,12 @@ const SubirVideo = () => {
                                             {loading ? (
                                                 <>
                                                     <span className="spinner-border spinner-border-sm me-2"></span>
-                                                    Subiendo...
+                                                    Procesando... {uploadProgress}%
                                                 </>
                                             ) : (
                                                 <>
-                                                    <i className="bi bi-cloud-upload me-2"></i>
-                                                    Subir Video
+                                                    <i className="bi bi-shield-lock me-2"></i>
+                                                    Subir Video Cifrado
                                                 </>
                                             )}
                                         </button>
@@ -330,13 +372,13 @@ const SubirVideo = () => {
                             <div className="card-body">
                                 <h6 className="card-title">
                                     <i className="bi bi-info-circle me-2"></i>
-                                    Consejos para subir videos
+                                    Proceso de cifrado autenticado
                                 </h6>
-                                <ul className="mb-0 small text-muted">
-                                    <li>Usa títulos descriptivos y claros</li>
-                                    <li>La descripción ayuda a los usuarios a entender el contenido</li>
-                                    <li>Verifica que el video tenga buena calidad antes de subirlo</li>
-                                </ul>
+                                <ol className="mb-0 small text-muted">
+                                    <li>Se genera una clave simétrica aleatoria (256 bits)</li>
+                                    <li>El video se cifra con ChaCha20-Poly1305 usando esta clave</li>
+                                    <li>La clave se cifra con RSA-OAEP (clave pública)</li>
+                                </ol>
                             </div>
                         </div>
                     </div>
