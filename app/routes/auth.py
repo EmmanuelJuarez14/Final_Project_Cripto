@@ -1,3 +1,5 @@
+# app/routes/auth.py
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from jose import jwt
@@ -5,27 +7,26 @@ from jose import jwt
 from app.schemas.auth import RegistroUsuario, LoginUsuario, UsuarioRespuesta
 from app.database import get_db
 from app.models import Usuario
-from app.dependencies import SECRET_KEY, ALGORITHM
+from app.config import SECRET_KEY, ALGORITHM
 
-router = APIRouter()
+router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
 # ===============================================================
-#   REGISTER (semana 3: recibe password SHA-256 desde el front)
+#   REGISTER — password viene en SHA-256 desde frontend
 # ===============================================================
+
 @router.post("/register", response_model=UsuarioRespuesta)
 def registrar_usuario(data: RegistroUsuario, db: Session = Depends(get_db)):
-    
-    # Verificar si el correo ya existe
+
     existente = db.query(Usuario).filter(Usuario.correo == data.correo).first()
     if existente:
-        raise HTTPException(status_code=400, detail="El correo ya está registrado.")
+        raise HTTPException(400, "Correo ya registrado")
 
-    # Crear usuario
     nuevo = Usuario(
         nombre=data.nombre,
         correo=data.correo,
-        password_hash=data.password_hash,   # hash SHA-256 generado en front-end
+        password_hash=data.password_hash,  # SHA-256 ya viene del front
         estado="pendiente",
         rol="usuario"
     )
@@ -37,30 +38,23 @@ def registrar_usuario(data: RegistroUsuario, db: Session = Depends(get_db)):
     return nuevo
 
 
+# ===============================================================
+#   LOGIN — retorna JWT Bearer Token
+# ===============================================================
 
-# ===============================================================
-#   LOGIN — retorna JWT (semana 3)
-# ===============================================================
 @router.post("/login")
 def login(data: LoginUsuario, db: Session = Depends(get_db)):
 
     usuario = db.query(Usuario).filter(Usuario.correo == data.correo).first()
 
     if not usuario:
-        raise HTTPException(status_code=404, detail="Usuario no encontrado.")
+        raise HTTPException(404, "Usuario no encontrado")
 
-    # Comparar hash enviado VS hash almacenado
     if usuario.password_hash != data.password_hash:
-        raise HTTPException(status_code=401, detail="Contraseña incorrecta.")
+        raise HTTPException(401, "Contraseña incorrecta")
 
-    # -----------------------------------------------------------
-    #   *** GENERAR JWT ***
-    # -----------------------------------------------------------
-    token = jwt.encode(
-        {"id": usuario.id},        # solo necesitamos saber el usuario
-        SECRET_KEY,
-        algorithm=ALGORITHM
-    )
+    # Generar JWT
+    token = jwt.encode({"id": usuario.id}, SECRET_KEY, algorithm=ALGORITHM)
 
     return {
         "access_token": token,

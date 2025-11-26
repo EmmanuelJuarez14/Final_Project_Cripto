@@ -1,119 +1,146 @@
-from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
-from fastapi.responses import FileResponse
-from sqlalchemy.orm import Session
-import uuid
+# app/routes/videos.py
+
 import os
-import re
+import uuid
+import base64
+
+from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
+from sqlalchemy.orm import Session
+from fastapi.responses import FileResponse
 
 from app.database import get_db
-from app.models import Video, Solicitud, Usuario
+from app.models import Video, Solicitud
 from app.dependencies import get_current_user
-from app.crypto.signature import hash_file, sign_hash, verify_signature
 
-router = APIRouter(prefix="/videos", tags=["videos"])
+from app.crypto.ecdsa_sign import hash_file, sign_hash, verify_signature
+from app.crypto.rsa_oaep import rsa_encrypt_key, rsa_decrypt_key
 
-UPLOAD_DIR = "videos_cifrados"
+router = APIRouter(prefix="/videos", tags=["Videos"])
+
+VIDEOS_DIR = "videos_cifrados"
+os.makedirs(VIDEOS_DIR, exist_ok=True)
 
 
-# ================================================================
-# SUBIR VIDEO (con firma ECDSA)
-# ================================================================
-@router.post("/upload")
-async def upload_video(
-    titulo: str = Form(...),
-    descripcion: str = Form(None),
-    key_cifrada: str = Form(...),
+# ============================================================
+#   🔐 ENDPOINT: SUBIR VIDEO (con ECDSA + RSA-OAEP)
+# ============================================================
+
+@router.post("/upload_video")
+async def subir_video(
     archivo: UploadFile = File(...),
+    titulo: str = Form(...),
+    descripcion: str = Form(""),
+    key_cifrada: str = Form(...),             # clave simétrica cifrada por el front (base64)
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user)
+    current_user = Depends(get_current_user)
 ):
 
-    if not archivo.filename.lower().endswith((".mp4", ".mov", ".mkv", ".avi")):
-        raise HTTPException(400, "Formato de video no permitido.")
+    # --------------------------------------------------------
+    # 1. Guardar archivo físicamente con nombre seguro
+    # --------------------------------------------------------
+    extension = archivo.filename.split(".")[-1]
+    nombre_seguro = f"{uuid.uuid4()}.{extension}"
+    ruta = os.path.join(VIDEOS_DIR, nombre_seguro)
 
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    with open(ruta, "wb") as f:
+        f.write(await archivo.read())
 
-    nombre_limpio = re.sub(r'[^a-zA-Z0-9._-]', '_', archivo.filename)
-    nombre_final = f"{uuid.uuid4()}_{nombre_limpio}"
-    ruta = os.path.join(UPLOAD_DIR, nombre_final)
+    # --------------------------------------------------------
+    # 2. Generar hash SHA-256 (bytes crudos)
+    # --------------------------------------------------------
+    video_hash = hash_file(ruta)
 
-    with open(ruta, "wb") as buffer:
-        buffer.write(await archivo.read())
+    # --------------------------------------------------------
+    # 3. Firmar hash con ECDSA
+    # --------------------------------------------------------
+    firma = sign_hash(video_hash)
 
-    # HASH + FIRMA (Semana 3)
-    hash_bytes = hash_file(ruta)
-    firma_bytes = sign_hash(hash_bytes)
+    # --------------------------------------------------------
+    # 4. Cifrar clave simétrica con RSA-OAEP
+    # --------------------------------------------------------
+    key_raw = base64.b64decode(key_cifrada)
+    key_cifrada_rsa = rsa_encrypt_key(key_raw)
+    key_cifrada_b64 = base64.b64encode(key_cifrada_rsa).decode()
 
+    # --------------------------------------------------------
+    # 5. Guardar registro en la BD
+    # --------------------------------------------------------
     nuevo = Video(
         titulo=titulo,
         descripcion=descripcion,
         ruta_archivo=ruta,
-        autor_id=current_user.id,
-        key_cifrada=key_cifrada,
-        hash_archivo=hash_bytes.hex(),
-        firma=firma_bytes.hex()
+        key_cifrada=key_cifrada_b64,
+        firma=base64.b64encode(firma).decode(),
+        autor_id=current_user.id
     )
 
     db.add(nuevo)
     db.commit()
     db.refresh(nuevo)
 
-    return {"mensaje": "Video subido", "id": nuevo.id}
-
-
-# ================================================================
-# VERIFICAR INTEGRIDAD + FIRMA DIGITAL
-# ================================================================
-@router.get("/verify_signature/{video_id}")
-def verify(video_id: int, db: Session = Depends(get_db)):
-    video = db.query(Video).filter(Video.id == video_id).first()
-    if not video:
-        raise HTTPException(404, "Video no encontrado")
-
-    hash_actual = hash_file(video.ruta_archivo).hex()
-    integridad = (hash_actual == video.hash_archivo)
-
-    firma_bytes = bytes.fromhex(video.firma)
-    firma_ok = verify_signature(bytes.fromhex(hash_actual), firma_bytes)
-
     return {
-        "integridad": "válida" if integridad else "corrupta",
-        "firma": "válida" if firma_ok else "inválida"
+        "mensaje": "Video subido correctamente",
+        "video_id": nuevo.id
     }
 
 
-# ================================================================
-# SOLICITAR ACCESO AL VIDEO (Semana 3)
-# ================================================================
-@router.post("/request_access/{video_id}")
-def request_access(video_id: int, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
+# ============================================================
+#   🔍 VERIFICAR FIRMA DE VIDEO
+# ============================================================
+
+@router.get("/verify_signature/{video_id}")
+def verificar(video_id: int, db: Session = Depends(get_db)):
+
     video = db.query(Video).filter(Video.id == video_id).first()
     if not video:
         raise HTTPException(404, "Video no encontrado")
 
-    existente = db.query(Solicitud).filter(
-        Solicitud.video_id == video_id,
-        Solicitud.solicitante_id == current_user.id
-    ).first()
+    hash_bytes = hash_file(video.ruta_archivo)
+    firma_bytes = base64.b64decode(video.firma)
 
-    if existente:
-        raise HTTPException(400, "Ya existe una solicitud para este video.")
+    valido = verify_signature(hash_bytes, firma_bytes)
 
-    nueva = Solicitud(
-        video_id=video_id,
+    return {
+        "video_id": video_id,
+        "integridad": "válida" if valido else "corrupta"
+    }
+
+
+# ============================================================
+#   📥 SOLICITAR ACCESO A VIDEO
+# ============================================================
+
+@router.post("/request_access/{video_id}")
+def solicitar_acceso(
+    video_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    video = db.query(Video).filter(Video.id == video_id).first()
+    if not video:
+        raise HTTPException(404, "Video no encontrado")
+
+    solicitud = Solicitud(
         solicitante_id=current_user.id,
+        video_id=video_id,
         estado="pendiente"
     )
 
-    db.add(nueva)
+    db.add(solicitud)
     db.commit()
-    return {"mensaje": "Solicitud enviada."}
+    return {"mensaje": "Solicitud enviada"}
 
 
+# ============================================================
+#   ✔ APROBAR / RECHAZAR ACCESO
+# ============================================================
 
-# APROBAR SOLICITUD (solo AUTOR del video)
 @router.post("/approve_request/{solicitud_id}")
-def approve_request(solicitud_id: int, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
+def aprobar(
+    solicitud_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
     sol = db.query(Solicitud).filter(Solicitud.id == solicitud_id).first()
     if not sol:
         raise HTTPException(404, "Solicitud no encontrada")
@@ -121,15 +148,20 @@ def approve_request(solicitud_id: int, db: Session = Depends(get_db), current_us
     video = db.query(Video).filter(Video.id == sol.video_id).first()
 
     if video.autor_id != current_user.id:
-        raise HTTPException(403, "No eres el dueño del video.")
+        raise HTTPException(403, "No eres dueño del video.")
 
     sol.estado = "aprobado"
     db.commit()
+
     return {"mensaje": "Solicitud aprobada"}
 
-# RECHAZAR SOLICITUD (solo AUTOR)
+
 @router.post("/reject_request/{solicitud_id}")
-def reject_request(solicitud_id: int, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
+def rechazar(
+    solicitud_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
     sol = db.query(Solicitud).filter(Solicitud.id == solicitud_id).first()
     if not sol:
         raise HTTPException(404, "Solicitud no encontrada")
@@ -137,33 +169,36 @@ def reject_request(solicitud_id: int, db: Session = Depends(get_db), current_use
     video = db.query(Video).filter(Video.id == sol.video_id).first()
 
     if video.autor_id != current_user.id:
-        raise HTTPException(403, "No eres el dueño del video.")
+        raise HTTPException(403, "No eres dueño del video.")
 
     sol.estado = "rechazado"
     db.commit()
+
     return {"mensaje": "Solicitud rechazada"}
 
 
+# ============================================================
+#   🔓 DESCARGAR VIDEO (solo si aprobado)
+# ============================================================
 
-# DESCARGAR VIDEO (solo autor o autorizado)
 @router.get("/download/{video_id}")
-def download(video_id: int, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
+def descargar(
+    video_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
     video = db.query(Video).filter(Video.id == video_id).first()
     if not video:
         raise HTTPException(404, "Video no encontrado")
 
-    # Autor siempre tiene acceso
-    if video.autor_id == current_user.id:
-        return FileResponse(video.ruta_archivo)
-
-    # Verificar solicitud aprobada
+    # Verificar permiso
     sol = db.query(Solicitud).filter(
         Solicitud.video_id == video_id,
         Solicitud.solicitante_id == current_user.id,
         Solicitud.estado == "aprobado"
     ).first()
 
-    if sol:
-        return FileResponse(video.ruta_archivo)
+    if not sol and current_user.id != video.autor_id:
+        raise HTTPException(403, "No tienes permiso para ver este video.")
 
-    raise HTTPException(403, "No tienes permiso para acceder a este video.")
+    return FileResponse(video.ruta_archivo)
