@@ -5,13 +5,17 @@ from app.routes import auth
 from app.routes import videos
 from app.crypto.ecdsa_keys import generate_keys
 from fastapi.middleware.cors import CORSMiddleware
+from app.routes import admin
+from app.crypto.rsa_keys import generate_rsa_keys
 
+generate_rsa_keys()
 generate_keys()
 
 models.Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="Streaming Secure Service")
 
+app = FastAPI(title="Streaming Secure Service")
+app.include_router(admin.router)
 app.include_router(auth.router)
 app.include_router(videos.router)
 
