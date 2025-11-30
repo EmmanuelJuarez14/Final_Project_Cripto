@@ -194,7 +194,7 @@ async function importarClavePublicaRSA() {
         
         // Si no existe, generar nuevas claves
         if (!publicPEM) {
-            console.warn('⚠️ No se encontró clave pública. Generando nuevas claves...');
+            console.warn('No se encontró clave pública. Generando nuevas claves...');
             const usuario = JSON.parse(localStorage.getItem('usuario') || '{}');
             const nombreUsuario = usuario.nombre || usuario.email || 'usuario';
             
@@ -278,7 +278,7 @@ export async function inicializarSistemaCifrado(nombreUsuario = null) {
     try {
         // Verificar si ya existen claves
         if (existenClavesRSA()) {
-            console.log('✅ Claves RSA ya existen en el sistema');
+            console.log('Claves RSA ya existen en el sistema');
             return {
                 nuevo: false,
                 mensaje: 'Claves RSA cargadas correctamente'
@@ -466,25 +466,25 @@ export function cifrarVideoConChaCha20(videoBytes, clave) {
             throw new Error(`La clave debe tener 32 bytes, tiene: ${clave.length}`);
         }
         
-        console.log('🔐 Cifrando video con ChaCha20-Poly1305:', {
+        console.log('Cifrando video con ChaCha20-Poly1305:', {
             tamañoVideo: videoBytes.length,
             tamañoClave: clave.length
         });
         
         // Generar nonce de 12 bytes (requerido por ChaCha20-Poly1305)
         const nonce = randomBytes(12);
-        console.log('✅ Nonce generado:', nonce.length, 'bytes');
+        console.log('Nonce generado:', nonce.length, 'bytes');
         
         // Crear cipher de ChaCha20-Poly1305
         // chacha20poly1305(key, nonce, AAD?) - AAD es opcional
         const cipher = chacha20poly1305(clave, nonce);
-        console.log('✅ Cipher ChaCha20-Poly1305 creado');
+        console.log('Cipher ChaCha20-Poly1305 creado');
         
         // Cifrar el video
         // El método encrypt incluye automáticamente el authentication tag de 16 bytes
-        console.log('🔒 Iniciando cifrado autenticado...');
+        console.log('Iniciando cifrado autenticado...');
         const ciphertext = cipher.encrypt(videoBytes);
-        console.log('✅ Cifrado completado:', ciphertext.length, 'bytes');
+        console.log('Cifrado completado:', ciphertext.length, 'bytes');
         
         // El ciphertext ya incluye el tag de autenticación al final (16 bytes)
         // Formato: nonce (12 bytes) + ciphertext + authTag (16 bytes ya incluido)
@@ -492,7 +492,7 @@ export function cifrarVideoConChaCha20(videoBytes, clave) {
         resultado.set(nonce, 0);
         resultado.set(ciphertext, nonce.length);
         
-        console.log('✅ Video cifrado exitosamente con autenticación:', {
+        console.log('Video cifrado exitosamente con autenticación:', {
             tamañoOriginal: videoBytes.length,
             tamañoCifrado: resultado.length,
             nonce: nonce.length,
@@ -502,8 +502,8 @@ export function cifrarVideoConChaCha20(videoBytes, clave) {
         return resultado;
         
     } catch (error) {
-        console.error('❌ Error detallado al cifrar:', error);
-        console.error('❌ Stack trace:', error.stack);
+        console.error('Error detallado al cifrar:', error);
+        console.error('Stack trace:', error.stack);
         throw new Error(`Error al cifrar video con ChaCha20-Poly1305: ${error.message}`);
     }
 }

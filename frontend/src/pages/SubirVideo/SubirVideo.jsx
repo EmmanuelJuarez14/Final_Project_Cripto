@@ -68,22 +68,22 @@ const SubirVideo = () => {
         setUploadProgress(0);
 
         try {
-            // ================================
+            
             // 1. Generar clave simétrica (32 bytes para ChaCha20)
-            // ================================
+            
             toast.info("Generando clave de cifrado...");
             const claveSimetrica = generarClaveSimetrica(); // Uint8Array de 32 bytes
             
-            // ================================
+            
             // 2. Cifrar la clave simétrica con RSA-OAEP
-            // ================================
+            
             toast.info("Cifrando clave con RSA-OAEP...");
             const keyCifrada = await cifrarClaveConRSA(claveSimetrica);
             setUploadProgress(10);
 
-            // ================================
+            
             // 3. Leer el archivo de video como ArrayBuffer
-            // ================================
+            
             toast.info("Leyendo archivo de video...");
             const arrayBuffer = await new Promise((resolve, reject) => {
                 const reader = new FileReader();
@@ -95,11 +95,11 @@ const SubirVideo = () => {
             const videoBytes = new Uint8Array(arrayBuffer);
             setUploadProgress(20);
 
-            // ================================
+
             // 4. Cifrar el video con ChaCha20-Poly1305
-            // ================================
+
             toast.info("Cifrando video con ChaCha20-Poly1305... (esto puede tardar)");
-            console.log('📊 Datos antes de cifrar:', {
+            console.log('Datos antes de cifrar:', {
                 videoBytes: videoBytes?.length,
                 claveSimetrica: claveSimetrica?.length,
                 tipoVideoBytes: videoBytes?.constructor?.name,
@@ -109,16 +109,15 @@ const SubirVideo = () => {
             const videoCifrado = cifrarVideoConChaCha20(videoBytes, claveSimetrica);
             setUploadProgress(60);
 
-            // ================================
+
             // 5. Crear Blob con el video cifrado
-            // ================================
-            // Preservar el nombre original del archivo para la validación del backend
+
+  
             const nombreOriginal = videoFile.name;
             const videoCifradoBlob = new Blob([videoCifrado], { type: 'application/octet-stream' });
-            
-            // ================================
+
             // 6. Enviar al backend
-            // ================================
+
             toast.info("Subiendo video cifrado al servidor...");
             const dataToSend = new FormData();
             dataToSend.append('titulo', formData.titulo);
