@@ -9,75 +9,92 @@ const Administrar = () => {
     const [tableData, setTableData] = useState([]);
     const navigate = useNavigate();
 
+    // Obtener el token desde localStorage
+    const getToken = () => {
+        const usuario = JSON.parse(localStorage.getItem("usuario"));
+        return usuario?.access_token || null;
+    };
+
     const handleOption = (route) => {
         console.log("click")
         navigate(route);
     }
 
-    const aceptarSolicitud = async (solicitudId) => {
-        /*
+    const aceptarSolicitud = async (userId) => {
         try {
-            const token = localStorage.getItem("token");
-            const response = await fetch(
-                `${import.meta.env.VITE_API_URL}/solicitudes/${solicitudId}/aceptar`,
-                {
-                    method: "PUT",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "x-token": `${token}`,
-                    },
-                    body: JSON.stringify({ estado: "aprobado" })
-                }
-            );
-
-            const result = await response.json();
-            console.log("Respuesta al aceptar solicitud:", result);
-
-            if (response.ok) {
-                toast.success("Solicitud aceptada correctamente.");
-                // Actualizar la tabla
-                fetchSolicitudes();
-            } else {
-                toast.error(result.error || "Error al aceptar la solicitud.");
+            console.log(userId)
+            const token = getToken();
+            if (!token) {
+                toast.error("No se encontró el token de autenticación.");
+                navigate("/login");
+                return;
             }
-        } catch (error) {
-            console.error("Error al aceptar solicitud:", error);
-            toast.error("Error al aceptar la solicitud.");
-        }
-        */
-    }
 
-    const eliminarSolicitud = async (solicitudId) => {
-    /*    if (!solicitudId) {
-            return;
-        }
-        try {
-            const token = localStorage.getItem("token");
             const response = await fetch(
-                `${import.meta.env.VITE_API_URL}/solicitudes/${solicitudId}`,
+                `${process.env.REACT_APP_API_URL}/admin/approve_user/${userId}`,
                 {
-                    method: "DELETE",
+                    method: "POST",
                     headers: {
                         "Content-Type": "application/json",
-                        "x-token": `${token}`,
+                        "Authorization": `Bearer ${token}`,
                     }
                 }
             );
 
             const result = await response.json();
-            console.log("Respuesta al eliminar solicitud:", result);
+            console.log("Respuesta al aprobar usuario:", result);
 
             if (response.ok) {
-                toast.success("Solicitud eliminada correctamente.");
-                setTableData(prev => prev.filter(s => s[0] !== solicitudId));
+                toast.success(result.mensaje || "Usuario aprobado correctamente.");
+                // Actualizar la tabla
+                fetchSolicitudes();
             } else {
-                toast.error(result.error || "Error al eliminar la solicitud.");
+                toast.error(result.detail || "Error al aprobar el usuario.");
             }
         } catch (error) {
-            console.error("Error al eliminar solicitud:", error);
-            toast.error("Error al eliminar la solicitud.");
+            console.error("Error al aprobar usuario:", error);
+            toast.error("Error al aprobar el usuario.");
         }
-        */
+    }
+
+    const eliminarSolicitud = async (userId) => {
+        if (!userId) {
+            return;
+        }
+        try {
+            const token = getToken();
+            if (!token) {
+                toast.error("No se encontró el token de autenticación.");
+                navigate("/login");
+                return;
+            }
+
+            // Asumiendo que existe un endpoint DELETE para usuarios
+            // Si no existe, necesitarías agregarlo al backend
+            const response = await fetch(
+                `${import.meta.env.VITE_API_URL}/admin/users/${userId}`,
+                {
+                    method: "DELETE",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${token}`,
+                    }
+                }
+            );
+
+            const result = await response.json();
+            console.log("Respuesta al eliminar usuario:", result);
+
+            if (response.ok) {
+                toast.success("Usuario eliminado correctamente.");
+                setTableData(prev => prev.filter(s => s[0] !== userId));
+            } else {
+                toast.error(result.detail || "Error al eliminar el usuario.");
+            }
+        } catch (error) {
+            console.error("Error al eliminar usuario:", error);
+            toast.error("Error al eliminar el usuario.");
+        }
     }
 
     useEffect(() => {
@@ -90,25 +107,25 @@ const Administrar = () => {
             if (target.classList.contains('aceptar-btn') || target.closest('.aceptar-btn')) {
                 try {
                     const button = target.classList.contains('aceptar-btn') ? target : target.closest('.aceptar-btn');
-                    const solicitudDataString = button.getAttribute('data-solicitud');
-                    const solicitudData = JSON.parse(solicitudDataString);
-                    aceptarSolicitud(solicitudData.id);
+                    const usuarioDataString = button.getAttribute('data-usuario');
+                    const usuarioData = JSON.parse(usuarioDataString);
+                    aceptarSolicitud(usuarioData.id);
                 } catch (error) {
-                    console.error("Error al obtener o parsear los datos de la solicitud:", error);
+                    console.error("Error al obtener o parsear los datos del usuario:", error);
                 }
             }
             // Verificamos si se hizo clic en el botón de eliminar
             else if (target.classList.contains('eliminar-btn') || target.closest('.eliminar-btn')) {
                 try {
                     const button = target.classList.contains('eliminar-btn') ? target : target.closest('.eliminar-btn');
-                    const solicitudDataString = button.getAttribute('data-solicitud');
-                    const solicitudData = JSON.parse(solicitudDataString);
+                    const usuarioDataString = button.getAttribute('data-usuario');
+                    const usuarioData = JSON.parse(usuarioDataString);
                     
-                    if (window.confirm('¿Estás seguro de que deseas eliminar esta solicitud?')) {
-                        eliminarSolicitud(solicitudData.id);
+                    if (window.confirm('¿Estás seguro de que deseas eliminar este usuario?')) {
+                        eliminarSolicitud(usuarioData.id);
                     }
                 } catch (error) {
-                    console.error("Error al obtener o parsear los datos de la solicitud:", error);
+                    console.error("Error al obtener o parsear los datos del usuario:", error);
                 }
             }
         };
@@ -128,100 +145,48 @@ const Administrar = () => {
 
     const fetchSolicitudes = async () => {
         try {
-            // const response = await fetch(`${}/solicitudes`, {
-            //     method: "GET",
-            //     headers: {
-            //         "Content-Type": "application/json",
-            //         "x-token": `${localStorage.getItem("token")}`,
-            //     },
-            // });
-            const response = {
-                ok: true,
-                json: async () => ({
-                    items: [
-                    {
-                        id: "sol_001",
-                        estado: "pendiente",
-                        fecha_solicitud: "2025-01-10T14:32:00Z",
-                        solicitante_id: "user_111",
-                        video_id: "vid_001",
-                        solicitante_rel: {
-                        nombre: "Carlos Hernández",
-                        email: "carlos@example.com"
-                        },
-                        video_rel: {
-                        titulo: "Primeros pasos en React"
-                        }
-                    },
-                    {
-                        id: "sol_002",
-                        estado: "aprobado",
-                        fecha_solicitud: "2025-01-12T09:20:00Z",
-                        solicitante_id: "user_222",
-                        video_id: "vid_002",
-                        solicitante_rel: {
-                        nombre: "María López",
-                        email: "maria@example.com"
-                        },
-                        video_rel: {
-                        titulo: "Criptografía con WebCrypto API"
-                        }
-                    },
-                    {
-                        id: "sol_003",
-                        estado: "rechazado",
-                        fecha_solicitud: "2025-01-15T19:05:00Z",
-                        solicitante_id: "user_333",
-                        video_id: "vid_003",
-                        solicitante_rel: {
-                        nombre: "Juan Pérez",
-                        email: "juanp@example.com"
-                        },
-                        video_rel: {
-                        titulo: "Cómo usar DynamoDB"
-                        }
-                    },
-                    {
-                        id: "sol_004",
-                        estado: "pendiente",
-                        fecha_solicitud: "2025-01-20T11:50:00Z",
-                        solicitante_id: "user_444",
-                        video_id: "vid_004",
-                        solicitante_rel: {
-                        nombre: "Ana Torres",
-                        email: "ana_t@example.com"
-                        },
-                        video_rel: {
-                        titulo: "Firmas digitales con Ed25519"
-                        }
-                    }
-                    ]
-                })
-                };
-
-            if (!response.ok) {
-                throw new Error("Error al obtener las solicitudes");
+            const token = getToken();
+            if (!token) {
+                toast.error("No se encontró el token de autenticación.");
+                navigate("/login");
+                return;
             }
 
-            const data = await response.json();
-            console.log(data);
+            // Llamada al endpoint de usuarios pendientes
+            const response = await fetch(`${process.env.REACT_APP_API_URL}/admin/users`, {
+                method: "GET",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`,
+                },
+            });
 
-            const solicitudes = data.items || data;
+            if (!response.ok) {
+                if (response.status === 401) {
+                    toast.error("Sesión expirada. Por favor inicia sesión nuevamente.");
+                    navigate("/login");
+                    return;
+                }
+                throw new Error("Error al obtener los usuarios pendientes");
+            }
 
-            const formattedData = solicitudes.map(s => {
-                const estadoBadge = s.estado === "pendiente" 
+            const usuarios = await response.json();
+            console.log("Usuarios pendientes:", usuarios);
+
+            const formattedData = usuarios.map(u => {
+                const estadoBadge = u.estado === "pendiente" 
                     ? '<span class="badge bg-warning">Pendiente</span>'
-                    : s.estado === "aprobado"
+                    : u.estado === "aprobado"
                     ? '<span class="badge bg-success">Aprobado</span>'
                     : '<span class="badge bg-danger">Rechazado</span>';
 
-                const accionButtons = s.estado === "pendiente"
-                    ? `<button class="btn btn-sm btn-success aceptar-btn me-2" data-solicitud='${JSON.stringify(s)}'>Aceptar</button>
-                       <button class="btn btn-sm btn-danger eliminar-btn" data-solicitud='${JSON.stringify(s)}'><i class="bi bi-trash-fill"></i></button>`
-                    : ``;
+                const accionButtons = u.estado === "pendiente"
+                    ? `<button class="btn btn-sm btn-success aceptar-btn me-2" data-usuario='${JSON.stringify(u)}'>Aprobar</button>
+                       <button class="btn btn-sm btn-danger eliminar-btn" data-usuario='${JSON.stringify(u)}'><i class="bi bi-trash-fill"></i></button>`
+                    : `<button class="btn btn-sm btn-danger eliminar-btn" data-usuario='${JSON.stringify(u)}'><i class="bi bi-trash-fill"></i></button>`;
 
-                const fechaFormateada = s.fecha_solicitud
-                    ? new Date(s.fecha_solicitud).toLocaleDateString("es-MX", {
+                const fechaFormateada = u.fecha_registro
+                    ? new Date(u.fecha_registro).toLocaleDateString("es-MX", {
                         day: "2-digit",
                         month: "2-digit",
                         year: "numeric",
@@ -229,20 +194,20 @@ const Administrar = () => {
                     : "";
 
                 return [
-                    s.id || "",
-                    s.solicitante_rel?.nombre || s.solicitante_rel?.email || "N/A",
-                    s.video_rel?.titulo || "N/A",
+                    u.id || "",
+                    u.nombre || "N/A",
+                    u.correo || "N/A",
                     estadoBadge,
-                    fechaFormateada,
+                    //fechaFormateada,
                     accionButtons,
                 ];
             });
 
-            console.log(formattedData);
+            console.log("Datos formateados:", formattedData);
             setTableData(formattedData);
         } catch (error) {
             console.error("Error:", error);
-            toast.error("Error al cargar las solicitudes.");
+            toast.error("Error al cargar los usuarios pendientes.");
         }
     };
 
@@ -255,22 +220,21 @@ const Administrar = () => {
             <Header admin={true}/>
             <div className='container d-flex flex-column justify-content-between align-items-center'>
                 <div className='input__container d-flex flex-column align-items-center mt-5' style={{padding:"3px"}}>
-                    <h3 className='bold'>Solicitudes</h3>
+                    <h3 className='bold'>Aceptar usuarios</h3>
                 </div>
                 <DataTable
                     data={tableData}
                     className="table table-striped data-table-wrapper"
                     options={{
-
-                        responsive: false, // Desactiva responsive si no lo necesitas
+                        responsive: false,
                         autoWidth: false,
                         deferRender: true,
                         columnDefs: [
                             {
-                                targets: [3, 5], // Las columnas "Estado" y "Acción"
-                                render: (data, type, row) => data, // Renderiza el HTML directo
-                                orderable: false, // Opcional: Deshabilita la ordenación
-                                searchable: false, // Opcional: Deshabilita la búsqueda
+                                targets: [3, 4], // Las columnas "Estado" y "Acción"
+                                render: (data, type, row) => data,
+                                orderable: false,
+                                searchable: false,
                             },
                         ],
                         language: {
@@ -284,7 +248,7 @@ const Administrar = () => {
                             infoFiltered: "(filtrado de _MAX_ registros totales)",
                             loadingRecords: "Cargando...",
                             zeroRecords: "No se encontraron registros",
-                            emptyTable: "No hay datos disponibles en la tabla",
+                            emptyTable: "No hay usuarios pendientes",
                             paginate: {
                                 first: "Primero",
                                 previous: "Anterior",
@@ -301,10 +265,9 @@ const Administrar = () => {
                     <thead className="table-primary">
                         <tr>
                             <th>ID</th>
-                            <th>Solicitante</th>
-                            <th>Video</th>
+                            <th>Nombre</th>
+                            <th>Email</th>
                             <th>Estado</th>
-                            <th>Fecha Solicitud</th>
                             <th>Acción</th>
                         </tr>
                     </thead>

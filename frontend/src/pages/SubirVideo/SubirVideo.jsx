@@ -16,7 +16,7 @@ const SubirVideo = () => {
     const [uploadProgress, setUploadProgress] = useState(0);
     
     const usuario = JSON.parse(localStorage.getItem("usuario"));
-    const autorId = usuario?.id;
+    const autorId = usuario.usuario_id;
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -126,13 +126,16 @@ const SubirVideo = () => {
             dataToSend.append('autor_id', autorId);
             // El tercer parámetro (nombreOriginal) se convierte en archivo.filename en el backend
             dataToSend.append('archivo', videoCifradoBlob, nombreOriginal);
-
+            console.log("dataToSend",dataToSend)
             setUploadProgress(70);
 
             const response = await fetch(
-                `${process.env.REACT_APP_API_URL}/videos/upload`,
+                `${process.env.REACT_APP_API_URL}/videos/upload_video`,
                 {
                     method: "POST",
+                    headers: {
+                        Authorization: `Bearer ${usuario.access_token}`,
+                    },
                     body: dataToSend
                 }
             );

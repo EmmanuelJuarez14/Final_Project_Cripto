@@ -36,7 +36,7 @@ const IniciarSesion=()=>{
     try {
       const password_hash = hashPassword(password);
 
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/login`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -49,6 +49,7 @@ const IniciarSesion=()=>{
       console.log("RAW:", raw);
 
       const data = raw ? JSON.parse(raw) : null;
+      console.log(data)
 
       if (!response.ok) {
         toast.error(data?.detail || "Error al iniciar sesión");
@@ -58,7 +59,7 @@ const IniciarSesion=()=>{
 
       toast.success("Inicio de sesión exitoso");
 
-      localStorage.setItem("usuario", JSON.stringify(data.usuario));
+      localStorage.setItem("usuario", JSON.stringify(data));
 
       navigate("/comunidad");
 

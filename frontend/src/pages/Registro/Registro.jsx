@@ -43,7 +43,7 @@ const Registro=()=>{
       password_hash: hashed
     };
 
-    const response = await fetch(`${process.env.REACT_APP_API_URL}/register`, {
+    const response = await fetch(`${process.env.REACT_APP_API_URL}/auth/register`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
