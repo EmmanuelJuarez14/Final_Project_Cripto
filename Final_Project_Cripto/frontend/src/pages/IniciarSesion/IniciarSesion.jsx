@@ -1,11 +1,12 @@
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { toast } from "react-toastify";
 import './_iniciarSesion.scss';
 import PublicHeader from "../../components/PublicHeader/PublicHeader";
+
+// Utilidades de seguridad
 import { hashPassword } from "../../utils/hash"; 
-import { toast } from "react-toastify";
-// IMPORTAR FUNCIONES DE CRIPTO
 import { inicializarSistemaCifrado, obtenerClavePublicaPEM } from "../../utils/crypto";
 
 const IniciarSesion = () => {
@@ -33,8 +34,10 @@ const IniciarSesion = () => {
         setLoading(true);
 
         try {
-            // 1. Login normal
+            // 1. Hasheamos la contraseña en el cliente (Requerimiento específico)
             const hashedPassword = hashPassword(password);
+
+            // 2. Petición de Login
             const response = await fetch(`${process.env.REACT_APP_API_URL}/auth/login`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -52,22 +55,23 @@ const IniciarSesion = () => {
                 return;
             }
 
-            // Guardar sesión
+            // 3. Guardar sesión en el navegador
             localStorage.setItem("usuario", JSON.stringify(data));
 
             // ============================================================
-            // 🚀 SINCRONIZACIÓN SILENCIOSA DE IDENTIDAD (Automático)
+            // 🚀 SINCRONIZACIÓN SILENCIOSA DE IDENTIDAD
             // ============================================================
+            // Esto asegura que el usuario siempre tenga llaves (nuevas o existentes)
+            // y que el servidor tenga su llave pública para recibir videos compartidos.
             try {
-                // A. Asegurar que existan llaves en el navegador
+                // A. Generar claves en RAM/LocalStorage si no existen
                 await inicializarSistemaCifrado(data.nombre);
                 
                 // B. Obtener la llave pública
                 const publicKeyPEM = obtenerClavePublicaPEM();
 
-                // C. Enviarla al backend silenciosamente
+                // C. Sincronizar con el servidor (para que otros puedan compartirme videos)
                 if (publicKeyPEM) {
-                    console.log("Sincronizando llave pública con el servidor...");
                     await fetch(`${process.env.REACT_APP_API_URL}/auth/users/me/public_key`, {
                         method: "POST",
                         headers: { 
@@ -80,22 +84,28 @@ const IniciarSesion = () => {
                     });
                 }
             } catch (cryptoError) {
-                console.error("Advertencia: No se pudo sincronizar la identidad criptográfica", cryptoError);
-                // No bloqueamos el login, pero avisamos en consola
+                console.warn("Advertencia: No se pudo sincronizar la identidad criptográfica", cryptoError);
             }
             // ============================================================
 
-            toast.success("Bienvenido de nuevo");
+            toast.success(`Bienvenido, ${data.nombre}`);
 
-            if (data.rol === "admin") {
-                navigate("/administrador");
+            // 4. Redirección Inteligente (Flow de Onboarding vs Recurrente)
+            if (data.primer_login) {
+                // Si es su primera vez, lo mandamos a descargar sus llaves obligatoriamente
+                navigate("/onboarding");
             } else {
-                navigate("/comunidad");
+                // Si ya es usuario recurrente, entra a su panel correspondiente
+                if (data.rol === "admin") {
+                    navigate("/administrador");
+                } else {
+                    navigate("/comunidad");
+                }
             }
 
         } catch (error) {
             console.error(error);
-            toast.error("Error de conexión");
+            toast.error("Error de conexión con el servidor");
         }
 
         setLoading(false);
@@ -107,6 +117,7 @@ const IniciarSesion = () => {
             <form className={`needs-validation ${validated ? "was-validated" : ""} form__container`} noValidate onSubmit={handleSubmit}>
                 <h2 className="bold">Iniciar sesión</h2>
                 <p>Completa los campos para ingresar a tu cuenta. ¿Aún no tienes una cuenta? <Link to="/signup"><u>crear cuenta</u></Link></p>
+                
                 <div className="mb-3">
                     <label htmlFor="email" className="form-label bold">Correo electrónico</label>
                     <input
@@ -120,6 +131,7 @@ const IniciarSesion = () => {
                     />
                     <div className="invalid-feedback">Por favor, introduce un correo válido.</div>
                 </div>
+                
                 <div className="mb-3">
                     <label htmlFor="password" className="form-label bold">Contraseña</label>
                     <input
@@ -134,6 +146,7 @@ const IniciarSesion = () => {
                     />
                     <div className="invalid-feedback">La contraseña debe tener al menos 8 caracteres.</div>
                 </div>
+                
                 <button type="submit" className="btn btn-primary" disabled={loading}>
                     {loading ? (
                         <>

@@ -15,6 +15,8 @@ import VerVideo from './pages/VerVideo/VerVideo';
 import SubirVideo from './pages/SubirVideo/SubirVideo';
 import Registro from './pages/Registro/Registro';
 import Administrar from './pages/Administrador/Administrar';
+import Onboarding from './pages/Onboarding/Onboarding';
+
 function App() {
   return (
     <Router>
@@ -31,7 +33,6 @@ function App() {
         style={{ zIndex: 9999 }}
       />
       <Routes>
-
         <Route
           path="/login"
           element={
@@ -92,6 +93,12 @@ function App() {
           element={
               <Administrar />
           }
+        />
+        <Route 
+          path="/onboarding" 
+          element={
+            <Onboarding />
+            } 
         />
         </Routes>
         

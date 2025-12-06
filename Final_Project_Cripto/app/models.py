@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, Boolean
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from .database import Base
@@ -16,6 +16,8 @@ class Usuario(Base):
 
     public_key = Column(Text, nullable=True)
 
+    primer_login= Column(Boolean, default=True)
+    
     videos = relationship("Video", back_populates="autor_rel")
     solicitudes = relationship("Solicitud", back_populates="solicitante_rel")
 

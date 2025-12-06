@@ -1,5 +1,5 @@
 import Header from "../../components/Header/Header"
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from "react-router-dom";
 import DataTable from 'datatables.net-react';
 import DT from 'datatables.net-bs5';
@@ -8,21 +8,34 @@ import { toast } from "react-toastify";
 DataTable.use(DT); 
 
 const Comunidad = () => {
-    const [tableData, setTableData] = useState([]);
+    const [allVideos, setAllVideos] = useState([]); // Almacena todos los videos del fetch
+    const [tableData, setTableData] = useState([]); // Datos filtrados para la tabla
+    const [activeTab, setActiveTab] = useState("explorar"); // 'explorar' | 'mis_videos'
     const navigate = useNavigate();
 
-    const handleOption = (route) => {
-        console.log("click")
-        navigate(route);
-    }
     const getToken = () => {
-        const usuario = JSON.parse(localStorage.getItem("usuario"));
-        return usuario?.access_token || null;
+        const usuarioStr = localStorage.getItem("usuario");
+        if (!usuarioStr) return null;
+        try {
+            const usuario = JSON.parse(usuarioStr);
+            return usuario.access_token || null;
+        } catch (e) { return null; }
     };
 
+    // Función para ir al reproductor
+    const handleVerVideo = (videoId) => {
+        navigate(`/videos/${videoId}`);
+    };
+
+    // Función para solicitar acceso
     const solicitarAcceso = async (videoId) => {
         try {
             const token = getToken();
+            if (!token) {
+                navigate("/login");
+                return;
+            }
+
             const response = await fetch(
                 `${process.env.REACT_APP_API_URL}/videos/request_access/${videoId}`,
                 {
@@ -35,59 +48,28 @@ const Comunidad = () => {
             );
 
             const result = await response.json();
-            console.log("Respuesta al solicitar acceso:", result);
 
             if (response.ok) {
-                toast.success("Solicitud enviada correctamente. Espera la aprobación del autor.");
-                // Opcional: Podrías actualizar el estado del botón para ese video
-                fetchVideos();
+                toast.success("Solicitud enviada. Espera la aprobación.");
+                fetchVideos(); // Recargar para actualizar estado del botón
             } else {
-                toast.error(result.detail || result.mensaje || "Error al solicitar acceso.");
+                toast.error(result.detail || "Error al solicitar.");
             }
         } catch (error) {
-            console.error("Error al solicitar acceso:", error);
-            toast.error("Error al solicitar acceso al video.");
+            console.error(error);
+            toast.error("Error de conexión.");
         }
     }
 
-    useEffect(() => {
-        const tableElement = document.querySelector('.data-table-wrapper');
-
-        const handleTableClick = (e) => {
-            const target = e.target;
-            
-            // Verificamos si se hizo clic en el botón de solicitar acceso
-            if (target.classList.contains('solicitar-btn') || target.closest('.solicitar-btn')) {
-                try {
-                    const button = target.classList.contains('solicitar-btn') ? target : target.closest('.solicitar-btn');
-                    const videoDataString = button.getAttribute('data-video');
-                    const videoData = JSON.parse(videoDataString);
-                    
-                    if (window.confirm(`¿Deseas solicitar acceso al video "${videoData.titulo}"?`)) {
-                        solicitarAcceso(videoData.id);
-                    }
-                } catch (error) {
-                    console.error("Error al obtener o parsear los datos del video:", error);
-                }
-            }
-        };
-
-        // Agregar el listener al contenedor de la tabla
-        if (tableElement) {
-            tableElement.addEventListener('click', handleTableClick);
-        }
-
-        // Función de limpieza para remover el listener al desmontar o actualizar
-        return () => {
-            if (tableElement) {
-                tableElement.removeEventListener('click', handleTableClick);
-            }
-        };
-    }, [tableData]);
-
-    const fetchVideos = async () => {
+    // Carga inicial de datos
+    const fetchVideos = useCallback(async () => {
         try {
             const token = getToken();
+            if (!token) {
+                navigate("/login");
+                return;
+            }
+
             const response = await fetch(
                 `${process.env.REACT_APP_API_URL}/videos/community`,
                 {
@@ -99,102 +81,193 @@ const Comunidad = () => {
                 }
             );
 
-            if (!response.ok) {
-                throw new Error("Error al obtener los videos");
-            }
+            if (!response.ok) throw new Error("Error al cargar videos");
 
             const data = await response.json();
-            console.log("Videos obtenidos:", data);
+            const lista = data.items || data.videos || data;
+            
+            setAllVideos(lista);
 
-            const videos = data.items || data.videos || data;
-
-            const formattedData = videos.map(v => {
-                // Puedes agregar lógica para mostrar diferentes botones según el estado
-                // Por ejemplo, si ya solicitaste acceso o si ya tienes acceso
-                const actionButton = v.ya_solicitado 
-                    ? `<span class="badge bg-warning">Solicitud Pendiente</span>`
-                    : v.tiene_acceso
-                    ? `<span class="badge bg-success">Tienes Acceso</span>`
-                    : `<button class="btn btn-sm btn-primary solicitar-btn" data-video='${JSON.stringify(v)}'>
-                         <i class="bi bi-send"></i> Solicitar Acceso
-                       </button>`;
-
-                return [
-                    v.titulo || "",
-                    v.descripcion || "",
-                    v.autor_rel?.nombre || v.autor_id || "N/A",
-                    actionButton
-                ];
-            });
-
-            console.log("Datos formateados:", formattedData);
-            setTableData(formattedData);
         } catch (error) {
-            console.error("Error:", error);
-            toast.error("Error al cargar los videos de la comunidad.");
+            console.error(error);
+            // toast.error("Error al cargar la comunidad.");
         }
-    };
+    }, [navigate]);
 
+    // Efecto para filtrar datos según la pestaña activa
+    useEffect(() => {
+        if (!allVideos.length) {
+            setTableData([]);
+            return;
+        }
+
+        // 1. Filtrar según pestaña
+        const videosFiltrados = allVideos.filter(v => {
+            if (activeTab === "explorar") {
+                // En Explorar, NO mostramos mis propios videos
+                return !v.es_autor;
+            } else {
+                // En Mis Videos, SOLO mostramos donde soy autor
+                return v.es_autor;
+            }
+        });
+
+        // 2. Formatear para la tabla
+        const formattedData = videosFiltrados.map(v => {
+            let actionButton = "";
+
+            if (activeTab === "mis_videos") {
+                // Si es mi video, botón para VER
+                actionButton = `
+                    <button class="btn btn-sm btn-success ver-btn" data-video='${JSON.stringify(v)}'>
+                        <i class="bi bi-play-circle"></i> Reproducir
+                    </button>
+                `;
+            } else {
+                // Si es de otro, lógica de solicitud
+                if (v.tiene_acceso) {
+                    actionButton = `<button class="btn btn-sm btn-success ver-btn" data-video='${JSON.stringify(v)}'>
+                                        <i class="bi bi-play-circle"></i> Ver (Acceso OK)
+                                    </button>`;
+                } else if (v.ya_solicitado) {
+                    actionButton = `<span class="badge bg-warning text-dark">Solicitud Pendiente</span>`;
+                } else if (v.fue_rechazado) {
+                    actionButton = `<span class="badge bg-danger">Rechazado</span>`;
+                } else {
+                    actionButton = `<button class="btn btn-sm btn-primary solicitar-btn" data-video='${JSON.stringify(v)}'>
+                                        <i class="bi bi-send"></i> Solicitar Acceso
+                                    </button>`;
+                }
+            }
+
+            return [
+                v.titulo || "",
+                v.descripcion || "",
+                v.autor_rel?.nombre || "Desconocido",
+                v.fecha_subida ? new Date(v.fecha_subida).toLocaleDateString() : "",
+                actionButton
+            ];
+        });
+
+        setTableData(formattedData);
+
+    }, [allVideos, activeTab]);
+
+    // Delegación de eventos para botones dinámicos
+    useEffect(() => {
+        const tableElement = document.querySelector('.data-table-wrapper');
+
+        const handleTableClick = (e) => {
+            const btn = e.target.closest('button');
+            if (!btn) return;
+
+            try {
+                const dataStr = btn.getAttribute('data-video');
+                if (!dataStr) return;
+                const videoData = JSON.parse(dataStr);
+                
+                if (btn.classList.contains('solicitar-btn')) {
+                    if (window.confirm(`¿Solicitar acceso a "${videoData.titulo}"?`)) {
+                        solicitarAcceso(videoData.id);
+                    }
+                } else if (btn.classList.contains('ver-btn')) {
+                    handleVerVideo(videoData.id);
+                }
+            } catch (err) { console.error(err); }
+        };
+
+        if (tableElement) tableElement.addEventListener('click', handleTableClick);
+        return () => {
+            if (tableElement) tableElement.removeEventListener('click', handleTableClick);
+        };
+    }, [tableData]); // Re-enlazar cuando cambia la tabla
+
+    // Cargar al inicio
     useEffect(() => {
         fetchVideos();
-    }, []);
+    }, [fetchVideos]);
 
     return (
         <div className="background">
             <Header />
-            <div className='container d-flex flex-column justify-content-between align-items-center'>
-                <div className='input__container d-flex flex-column align-items-center mt-5' style={{padding:"3px"}}>
-                    <h3 className='bold'>Comunidad</h3>
+            <div className='container mt-5'>
+                <div className='input__container d-flex flex-column align-items-center mb-4 p-4' style={{padding:"3px"}}>
+                    <h3 className='bold text-primary'>Comunidad de Videos</h3>
+                    <p className="text-muted">Explora contenido seguro o gestiona tus subidas</p>
                 </div>
-                <DataTable
-                    data={tableData}
-                    className="table table-striped data-table-wrapper"
-                    options={{
-                        responsive: false,
-                        autoWidth: false,
-                        deferRender: true,
-                        columnDefs: [
-                            {
-                                targets: 3, // La columna "Acción"
-                                render: (data, type, row) => data,
-                                orderable: false,
-                                searchable: false,
+
+                {/* --- PESTAÑAS --- */}
+                <ul className="nav nav-tabs mb-0 border-bottom-0 ps-2">
+                    <li className="nav-item">
+                        <button 
+                            className={`nav-link px-4 ${activeTab === 'explorar' ? 'active fw-bold' : ''}`}
+                            style={{
+                                backgroundColor: activeTab === 'explorar' ? '#0E3D55' : '#e9ecef',
+                                color: activeTab === 'explorar' ? '#fff' : '#0E3D55',
+                                border: '1px solid #0E3D55'
+                            }}
+                            onClick={() => setActiveTab('explorar')}
+                        >
+                            <i className="bi bi-globe me-2"></i>
+                            Explorar Comunidad
+                        </button>
+                    </li>
+
+                    <li className="nav-item">
+                        <button 
+                            className={`nav-link px-4 ${activeTab === 'mis_videos' ? 'active fw-bold' : ''}`}
+                            style={{
+                                backgroundColor: activeTab === 'mis_videos' ? '#0E3D55' : '#e9ecef',
+                                color: activeTab === 'mis_videos' ? '#fff' : '#0E3D55',
+                                border: '1px solid #0E3D55'
+                            }}
+                            onClick={() => setActiveTab('mis_videos')}
+                        >
+                            <i className="bi bi-collection-play-fill me-2"></i>
+                            Mis Videos Subidos
+                        </button>
+                    </li>
+                </ul>
+
+                {/* --- TABLA --- */}
+                <div className="bg-white p-4 rounded-bottom shadow-sm border border-top-0 data-table-wrapper" style={{marginTop: '-1px'}}>
+                    <DataTable
+                        data={tableData}
+                        className="table table-striped align-middle"
+                        options={{
+                            responsive: true,
+                            autoWidth: false,
+                            destroy: true, // Vital para recargar al cambiar tabs
+                            columnDefs: [
+                                {
+                                    targets: 4, // Columna Acciones
+                                    render: (data) => data,
+                                    orderable: false,
+                                    searchable: false,
+                                    className: "text-center"
+                                },
+                            ],
+                            language: {
+                                search: "Buscar video:",
+                                lengthMenu: "Mostrar _MENU_",
+                                info: "Mostrando _START_ a _END_ de _TOTAL_",
+                                emptyTable: "No hay videos en esta sección",
+                                zeroRecords: "No encontrado",
+                                paginate: { first: "«", last: "»", next: "›", previous: "‹" }
                             },
-                        ],
-                        language: {
-                            decimal: ",",
-                            thousands: ".",
-                            processing: "Procesando...",
-                            search: "Buscar:",
-                            lengthMenu: "Mostrar _MENU_ registros",
-                            info: "Mostrando _START_ a _END_ de _TOTAL_",
-                            infoEmpty: "Mostrando 0 a 0 de 0 registros",
-                            infoFiltered: "(filtrado de _MAX_ registros totales)",
-                            loadingRecords: "Cargando...",
-                            zeroRecords: "No se encontraron registros",
-                            emptyTable: "No hay datos disponibles en la tabla",
-                            paginate: {
-                                first: "Primero",
-                                previous: "Anterior",
-                                next: "Siguiente",
-                                last: "Último",
-                            },
-                            aria: {
-                                sortAscending: ": activar para ordenar columna ascendente",
-                                sortDescending: ": activar para ordenar columna descendente",
-                            },
-                        },
-                    }}
-                >
-                    <thead className="table-primary">
-                        <tr>
-                            <th>Título</th>
-                            <th>Descripción</th>
-                            <th>Autor</th>
-                            <th>Acción</th>
-                        </tr>
-                    </thead>
-                </DataTable>
+                        }}
+                    >
+                        <thead className="table-primary">
+                            <tr>
+                                <th>Título</th>
+                                <th>Descripción</th>
+                                <th>Autor</th>
+                                <th>Fecha</th>
+                                <th className="text-center">Acción</th>
+                            </tr>
+                        </thead>
+                    </DataTable>
+                </div>
             </div>
         </div>
     )

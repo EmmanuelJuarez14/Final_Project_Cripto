@@ -1,0 +1,25 @@
+// _onboarding.scss
+
+// Asegurar que el fondo cubra toda la pantalla
+.vh-100 {
+    min-height: 100vh;
+    background-color: #D9D9D9; // El color gris de fondo de tu app
+}
+
+// Estilo para la tarjeta
+.card {
+    border-radius: 1rem;
+    border: none;
+}
+
+// Icono grande del candado
+.bi-shield-lock-fill {
+    font-size: 5rem;
+    color: #0E3D55; // Tu color primario
+}
+
+// Ajuste de botones
+.btn-lg {
+    padding: 1rem;
+    font-weight: bold;
+}

@@ -10,6 +10,7 @@ from app.models import Usuario
 from app.config import SECRET_KEY, ALGORITHM
 from app.dependencies import get_current_user # Necesario para identificar al usuario al subir la llave
 
+
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
@@ -71,7 +72,8 @@ def login(data: LoginUsuario, db: Session = Depends(get_db)):
         "usuario_id": usuario.id,
         "nombre": usuario.nombre,
         "rol": usuario.rol,
-        "estado": usuario.estado
+        "estado": usuario.estado,
+        "primer_login": usuario.primer_login
     }
 
 
@@ -94,3 +96,15 @@ def update_public_key(
     db.commit()
     
     return {"msg": "Llave pública actualizada correctamente"}
+
+# ===============================================================
+#   NUEVO: CONFIRMAR PRIMER LOGIN (Apagar bandera)
+# ===============================================================
+@router.post("/users/me/confirm_first_login")
+def confirmar_primer_login(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    current_user.primer_login = False
+    db.commit()
+    return {"mensaje": "Primer login completado."}
