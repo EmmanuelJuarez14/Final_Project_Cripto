@@ -1,0 +1,15 @@
+$primary: #0E3D55; 
+@use "bootstrap" with (
+  $primary: $primary
+);
+body{
+  width: 100%;
+}
+#root {
+  width: 100%;
+}
+
+ul{
+  list-style: none;
+}
+

@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+SQLAlchemy
+pydantic
+cryptography
+pycryptodome
+python-multipart
+python-jose[cryptography]
+pydantic[email]
