@@ -13,6 +13,10 @@ const Solicitudes = () => {
         console.log("click")
         navigate(route);
     }
+    const getToken = () => {
+        const usuario = JSON.parse(localStorage.getItem("usuario"));
+        return usuario?.access_token || null;
+    };
 
     const aceptarSolicitud = async (solicitudId) => {
         try {
@@ -45,7 +49,7 @@ const Solicitudes = () => {
 
     const rechazarSolicitud = async (solicitudId) => {
         try {
-            const token = localStorage.getItem("token");
+            const token = getToken()
             const response = await fetch(
                 `${import.meta.env.VITE_API_URL}/videos/reject_request/${solicitudId}`,
                 {
@@ -122,7 +126,7 @@ const Solicitudes = () => {
         try {
             const token = localStorage.getItem("token");
             const response = await fetch(
-                `${import.meta.env.VITE_API_URL}/videos/solicitudes`,
+                `${process.env.REACT_APP_API_URL}/videos/solicitudes`,
                 {
                     method: "GET",
                     headers: {
