@@ -54,3 +54,29 @@ def hacer_admin(user_id: int, db: Session = Depends(get_db), admin=Depends(requi
     db.commit()
 
     return {"mensaje": f"Usuario {user_id} ahora es administrador."}
+
+# ============================================================
+#   🗑️ ELIMINAR USUARIO (Endpoint Faltante)
+# ============================================================
+
+@router.delete("/users/{user_id}")
+def eliminar_usuario(
+    user_id: int, 
+    db: Session = Depends(get_db), 
+    admin = Depends(require_admin) # Solo un admin puede ejecutar esto
+):
+    # 1. Buscar al usuario que queremos borrar
+    user_to_delete = db.query(Usuario).filter(Usuario.id == user_id).first()
+    
+    if not user_to_delete:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    # 2. Protección: Evitar que el admin se borre a sí mismo por error
+    if user_to_delete.id == admin.id:
+        raise HTTPException(status_code=400, detail="No puedes eliminar tu propia cuenta de administrador.")
+
+    # 3. Eliminar y guardar cambios
+    db.delete(user_to_delete)
+    db.commit()
+
+    return {"mensaje": f"Usuario {user_to_delete.correo} eliminado correctamente."}
