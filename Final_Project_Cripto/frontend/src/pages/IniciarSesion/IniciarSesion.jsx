@@ -4,40 +4,34 @@ import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
 import './_iniciarSesion.scss';
 import PublicHeader from "../../components/PublicHeader/PublicHeader";
+import ModalRestauracion from "../../components/ModalRestauracion/ModalRestauracion"; // <--- IMPORTAR
 
-// Utilidades de seguridad
 import { hashPassword } from "../../utils/hash"; 
-import { inicializarSistemaCifrado, obtenerClavePublicaPEM } from "../../utils/crypto";
+// Importar 'existenClavesRSA' para verificar
+import { inicializarSistemaCifrado, obtenerClavePublicaPEM, existenClavesRSA } from "../../utils/crypto";
 
 const IniciarSesion = () => {
     
     const navigate = useNavigate();
-    const [validated, setValidated] = useState(false);
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [loading, setLoading] = useState(false);
+    
+    // Estado para el Modal
+    const [showRestoreModal, setShowRestoreModal] = useState(false);
+    const [tempUserData, setTempUserData] = useState(null);
 
     const handleSubmit = (event) => {
-        const form = event.currentTarget;
-        setValidated(true);
-        if (form.checkValidity() === false) {
-            event.preventDefault();
-            event.stopPropagation();
-        } else {
-            event.preventDefault();
-            event.stopPropagation();
-            handleLogin();
-        }
+        event.preventDefault();
+        event.stopPropagation();
+        handleLogin();
     };
 
     const handleLogin = async () => {
         setLoading(true);
 
         try {
-            // 1. Hasheamos la contraseña en el cliente (Requerimiento específico)
             const hashedPassword = hashPassword(password);
-
-            // 2. Petición de Login
             const response = await fetch(`${process.env.REACT_APP_API_URL}/auth/login`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -55,66 +49,79 @@ const IniciarSesion = () => {
                 return;
             }
 
-            // 3. Guardar sesión en el navegador
+            // Guardar sesión
             localStorage.setItem("usuario", JSON.stringify(data));
 
             // ============================================================
-            // 🚀 SINCRONIZACIÓN SILENCIOSA DE IDENTIDAD
+            // 🧠 LÓGICA DE DETECCIÓN DE DISPOSITIVO / INCÓGNITO
             // ============================================================
-            // Esto asegura que el usuario siempre tenga llaves (nuevas o existentes)
-            // y que el servidor tenga su llave pública para recibir videos compartidos.
-            try {
-                // A. Generar claves en RAM/LocalStorage si no existen
-                await inicializarSistemaCifrado(data.nombre);
-                
-                // B. Obtener la llave pública
-                const publicKeyPEM = obtenerClavePublicaPEM();
+            
+            // CASO 1: Primer Login (Nunca ha tenido llaves) -> Ir a Onboarding
+            if (data.primer_login) {
+                navigate("/onboarding");
+                return;
+            }
 
-                // C. Sincronizar con el servidor (para que otros puedan compartirme videos)
-                if (publicKeyPEM) {
+            // CASO 2: Usuario Recurrente SIN LLAVES (Incógnito/Nuevo PC)
+            if (!existenClavesRSA()) {
+                console.warn("Detectado usuario recurrente sin llaves. Solicitando restauración.");
+                setTempUserData(data); // Guardamos data temporalmente
+                setShowRestoreModal(true); // ¡ALTO! Mostrar Modal
+                setLoading(false); 
+                return; // No navegamos aún
+            }
+
+            // CASO 3: Usuario Recurrente CON LLAVES (Mismo PC)
+            // Sincronización silenciosa normal
+            try {
+                await inicializarSistemaCifrado(data.nombre);
+                const pubKey = obtenerClavePublicaPEM();
+                if(pubKey) {
                     await fetch(`${process.env.REACT_APP_API_URL}/auth/users/me/public_key`, {
                         method: "POST",
                         headers: { 
                             "Content-Type": "application/json",
                             "Authorization": `Bearer ${data.access_token}`
                         },
-                        body: JSON.stringify({
-                            public_key_pem: publicKeyPEM
-                        })
+                        body: JSON.stringify({ public_key_pem: pubKey })
                     });
                 }
-            } catch (cryptoError) {
-                console.warn("Advertencia: No se pudo sincronizar la identidad criptográfica", cryptoError);
-            }
-            // ============================================================
+            } catch (e) { console.error(e); }
 
-            toast.success(`Bienvenido, ${data.nombre}`);
-
-            // 4. Redirección Inteligente (Flow de Onboarding vs Recurrente)
-            if (data.primer_login) {
-                // Si es su primera vez, lo mandamos a descargar sus llaves obligatoriamente
-                navigate("/onboarding");
-            } else {
-                // Si ya es usuario recurrente, entra a su panel correspondiente
-                if (data.rol === "admin") {
-                    navigate("/administrador");
-                } else {
-                    navigate("/comunidad");
-                }
-            }
+            // Navegar
+            completeLoginRedirect(data);
 
         } catch (error) {
             console.error(error);
-            toast.error("Error de conexión con el servidor");
+            toast.error("Error de conexión");
+            setLoading(false);
         }
+    };
 
-        setLoading(false);
+    // Función auxiliar para redirigir tras éxito
+    const completeLoginRedirect = (userData) => {
+        toast.success(`Bienvenido de nuevo, ${userData.nombre}`);
+        if (userData.rol === "admin") {
+            navigate("/administrador");
+        } else {
+            navigate("/comunidad");
+        }
     };
 
     return (
         <div className="background">
             <PublicHeader />
-            <form className={`needs-validation ${validated ? "was-validated" : ""} form__container`} noValidate onSubmit={handleSubmit}>
+            
+            {/* --- MODAL DE RESTAURACIÓN --- */}
+            <ModalRestauracion 
+                show={showRestoreModal}
+                usuarioData={tempUserData}
+                onHide={() => setShowRestoreModal(false)}
+                onSuccess={() => completeLoginRedirect(tempUserData)}
+            />
+            {/* ----------------------------- */}
+
+            <form className="form__container" onSubmit={handleSubmit}>
                 <h2 className="bold">Iniciar sesión</h2>
                 <p>Completa los campos para ingresar a tu cuenta. ¿Aún no tienes una cuenta? <Link to="/signup"><u>crear cuenta</u></Link></p>
                 
@@ -129,7 +136,6 @@ const IniciarSesion = () => {
                         onChange={(e) => (setEmail(e.target.value))}
                         required
                     />
-                    <div className="invalid-feedback">Por favor, introduce un correo válido.</div>
                 </div>
                 
                 <div className="mb-3">
@@ -138,19 +144,17 @@ const IniciarSesion = () => {
                         type="password"
                         className="form__input--borde form-control"
                         id="password"
-                        placeholder="********"
                         required
                         minLength="8"
                         value={password}
                         onChange={(e) => { setPassword(e.target.value) }}
                     />
-                    <div className="invalid-feedback">La contraseña debe tener al menos 8 caracteres.</div>
                 </div>
                 
                 <button type="submit" className="btn btn-primary" disabled={loading}>
                     {loading ? (
                         <>
-                            <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                            <span className="spinner-border spinner-border-sm me-2"></span>
                             Ingresando...
                         </>
                     ) : (
