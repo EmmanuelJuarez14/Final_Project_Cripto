@@ -24,7 +24,7 @@ VIDEOS_DIR = "videos_cifrados"
 os.makedirs(VIDEOS_DIR, exist_ok=True)
 
 
-# Subir Video (con ECDSA + RSA-OAEP)
+# Subir Video 
 
 @router.post("/upload_video")
 async def subir_video(
@@ -36,7 +36,7 @@ async def subir_video(
     current_user = Depends(get_current_user)
 ):
 
-    # 1. Guardar archivo físicamente
+    # Formato de nombre correcto
     extension = archivo.filename.split(".")[-1]
     nombre_seguro = f"{uuid.uuid4()}.{extension}"
     ruta = os.path.join(VIDEOS_DIR, nombre_seguro)
@@ -44,7 +44,7 @@ async def subir_video(
     with open(ruta, "wb") as f:
         f.write(await archivo.read())
 
-    # 2. Generar hash SHA-256 (bytes crudos)
+    # Generar hash SHA-256 
     video_hash = hash_file(ruta)
 
     # Firmar ECDSA
@@ -54,7 +54,7 @@ async def subir_video(
         titulo=titulo,
         descripcion=descripcion,
         ruta_archivo=ruta,
-        key_cifrada=key_cifrada, # Esta llave solo la puede abrir el autor
+        key_cifrada=key_cifrada, 
         hash_archivo=base64.b64encode(video_hash).decode(),
         firma=base64.b64encode(firma).decode(),
         autor_id=current_user.id
@@ -70,7 +70,6 @@ async def subir_video(
     }
 
 # Verifica firma
-
 @router.get("/verify_signature/{video_id}")
 def verificar(video_id: int, db: Session = Depends(get_db)):
 
